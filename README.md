@@ -93,7 +93,7 @@
 * In AWS you apply the least privilege principle: don’t give more Permissions than a User needs.
 
 ### IAM Policies Structure
-<img src="./Images/aws_cloud01.png" alt="preview" width="600" height="400">
+  ![preview](./Images/aws_cloud01.png)
 
 * Consists of
   * **Version:** Policy Language Version, always include “2012-10-17”
@@ -217,6 +217,7 @@
   * EC2 Instance Roles
   * Lambda Function Roles
   * Roles for CloudFormation
+  ![preview](./Images/aws_cloud91.png)
 
 ### Create Role
 * Go to IAM, in Access management select `Roles`.
@@ -716,7 +717,7 @@
   * To overcome this, we create ENI and attach to Instance
   * If the Instance fails, we create another Instance and attach the same ENI to that Instance
   * In both times we can use ENI Private IP
-<img src="./Images/aws_cloud12.png" alt="preview" width="700" height="350">
+  ![preview](./Images/aws_cloud12.png)
 
 ### Create Network Interface (ENI)
 * Go to EC2, select `Network Interfaces` in Network & Security.
@@ -750,7 +751,7 @@
   * Long-running processing
   * Saving the RAM state
   * Services that take time to initialize
-<img src="./Images/aws_cloud13.png" alt="preview" width="700" height="500">
+  ![preview](./Images/aws_cloud13.png)
 
 ### EC2 Hibernate – Good to know
 * **Supported Instance Families:** C3, C4, C5, I3, M3, M4, R3, R4, T2, T3, …
@@ -987,8 +988,8 @@
   * Max throughput 250 MiB/s – max IOPS 250
 
 ### EBS –Volume Types Summary
-<img src="./Images/aws_cloud19.png" alt="preview" width="800" height="800">
-<img src="./Images/aws_cloud20.png" alt="preview" width="800" height="450">
+  ![preview](./Images/aws_cloud19.png)
+  ![preview](./Images/aws_cloud20.png)
 
 ## EBS Multi-Attach – io1/io2 family
 * Attach the same EBS volume to multiple EC2 instances in the same AZ
@@ -998,7 +999,7 @@
   * Applications must manage concurrent write operations
 * **Up to 16 EC2 Instances at a time**
 * Must use a file system that’s cluster-aware (not XFS, EXT4, etc…)
-<img src="./Images/aws_cloud21.png" alt="preview" width="500" height="300">
+  ![preview](./Images/aws_cloud21.png)
 
 ## EBS Encryption
 * When you create an encrypted EBS volume, you get the following:
@@ -1041,7 +1042,7 @@
 * Managed NFS (network file system) that can be mounted on many EC2
 * EFS works with EC2 instances in multi-AZ
 * Highly available, scalable, expensive (3x gp2), pay per use
-<img src="./Images/aws_cloud22.png" alt="preview" width="500" height="250">
+  ![preview](./Images/aws_cloud22.png)
 
 * Use cases: content management, web serving, data sharing, Wordpress
 * Uses NFSv4.1 protocol
@@ -1075,7 +1076,7 @@
   * Standard: Multi-AZ, great for prod
   * One Zone: One AZ, great for dev, backup enabled by default, compatible with IA (EFS One Zone-IA)
 * Over 90% in cost savings
-<img src="./Images/aws_cloud23.png" alt="preview" width="400" height="600">
+  ![preview](./Images/aws_cloud23.png)
 
 ### Create Amazon Elastic File System (EFS)
 * Go to `EFS`.
@@ -1130,7 +1131,7 @@
     * Restore the snapshot to another AZ
     * EBS backups use IO and you shouldn’t run them while your application is handling a lot of traffic 
   * Root EBS Volumes of instances get terminated by default if the EC2 instance gets terminated. (you can disable that)
-  <img src="./Images/aws_cloud24.png" alt="preview" width="500" height="350">
+  ![preview](./Images/aws_cloud24.png)
 * **Elastic File System:**
   * Mounting 100s of instances across AZ
   * EFS share website files (WordPress)
@@ -1138,7 +1139,7 @@
   * EFS has a higher price point than EBS
   * Can leverage Storage Tiers for cost savings
   * Remember: EFS vs EBS vs Instance Store
-  <img src="./Images/aws_cloud25.png" alt="preview" width="500" height="350">
+  ![preview](./Images/aws_cloud25.png)
 
 
 
@@ -1399,7 +1400,7 @@
   * **Transparent Network Gateway** – single entry/exit for all traffic
   * **Load Balancer** – distributes traffic to your virtual appliances
 * Uses the **GENEVE** protocol on port **6081**
-  <img src="./Images/aws_cloud35.png" alt="preview" width="550" height="500">
+  ![preview](./Images/aws_cloud35.png)
 
 #### Gateway Load Balancer – Target Groups
 * **EC2 instances**
@@ -1412,7 +1413,7 @@
 * For both CLB & ALB, the “cookie” used for stickiness has an expiration date you control
 * Use case: make sure the user doesn’t lose his session data
 * Enabling stickiness may bring imbalance to the load over the backend EC2 instances
-  <img src="./Images/aws_cloud37.png" alt="preview" width="450" height="350">
+  ![preview](./Images/aws_cloud37.png)
 #### Sticky Sessions – Cookie Names
 * **Application-based Cookies**
   * **Custom cookie**
@@ -1538,7 +1539,7 @@
 * Between 1 to 3600 seconds (default: 300 seconds)
 * Can be disabled (set value to 0)
 * Set to a low value if your requests are short
-  <img src="./Images/aws_cloud41.png" alt="preview" width="550" height="350">
+  ![preview](./Images/aws_cloud41.png)
 
 ## Auto Scaling Group
 * In real-life, the load on your websites and application can change
@@ -1631,13 +1632,13 @@
 * **RequestCountPerTarget:** to make sure the number of requests per EC2 instances is stable
 * **Average Network In / Out** (if you’re application is network bound)
 * **Any custom metric** (that you push using CloudWatch)
-  <img src="./Images/aws_cloud46.png" alt="preview" width="550" height="450">
+  ![preview](./Images/aws_cloud46.png)
 
 ### Auto Scaling Groups - Scaling Cooldowns
 * After a scaling activity happens, you are in the **cooldown period (default 300 seconds)**
 * During the cooldown period, the ASG will not launch or terminate additional instances (to allow for metrics to stabilize)
 * **Advice:** Use a ready-to-use AMI to reduce configuration time in order to be serving request fasters and reduce the cooldown period
-  <img src="./Images/aws_cloud47.png" alt="preview" width="650" height="400">
+  ![preview](./Images/aws_cloud47.png)
 
 ### Add Scaling Policies to Auto Scaling Group
 * Go to Auto Scaling Group and select `Automatic scaling`.
