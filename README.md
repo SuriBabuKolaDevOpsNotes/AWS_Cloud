@@ -555,6 +555,36 @@
 * **Dedicated Hosts:** We book an entire building of the resort
 * **Capacity Reservations:** you book a room for a period with full price even you don’t stay in it
 
+## AWS Charges for IPv4 Addresses
+* Starting February 1st 2024, there’s a charge for all Public IPv4 created in your account
+* **0.005`$` per hour of Public IPv4 (~3.6`$` per month)**
+* For new accounts in AWS, you have a free tier for the **EC2 service:** 750 hours of Public IPv4 per month for the first 12 months
+* **For all other services there is no free tier**
+  ![preview](./Images/aws_cloud128.png)
+* **What about IPv6?**
+  * Unfortunately, many Internet Service Provider (ISP) around the world don’t support IPv6
+  * We can test IPv6 by going to  https://test-ipv6.com/ 
+  * If you use IPv6 in this course, you’re on your own (security groups, networking…) but you can do it! 
+* **How to troubleshoot charges?**
+  * Go into your AWS Bill
+  * Look into the AWS Public IP Insights service
+  * [Refer Here](https://repost.aws/articles/ARknH_OR0cTvqoTfJrVGaB8A/why-am-i-seeing-charges-for-public-ipv4-addresses-when-i-am-under-the-aws-free-tier) for Article
+
+## Amazon VPC IP Address Manager
+* Amazon VPC IP Address Manager (IPAM) is a feature provided by AWS to help you manage IP addresses efficiently and securely within your AWS environment.
+* It is particularly useful when you are working with large or complex network architectures involving multiple Virtual Private Clouds (VPCs), on-premises networks, and hybrid environments.
+
+### Create IPAM 
+* Go to `Amazon VPC IP Address Manager (IPAM)`
+  * `Allow data replication`
+  * Select `IPAM tier`
+  * In `IPAM settings`,
+    * Give `Name tag`
+    * Select `Operating Regions`
+  * Click `Create IPAM`
+* In Amazon VPC IP Address Manager (IPAM), click `Public IP insights`
+  * In that shows All Public IP Address Types.
+
 ## EC2 Spot Instance Requests
 * Can get a discount of up to 90% compared to On-demand
 * Define **max spot price** and get the instance while **current spot price < max**
@@ -2428,3 +2458,992 @@
   2. Update NS Records on 3rd party website to use Route 53 **Name Servers**
 * **Domain Registrar != DNS Service**
 * But every Domain Registrar usually comes with some DNS features
+
+
+
+# Classic Solutions Architecture
+* Let’s understand how all the technologies we’ve seen work together
+* We’ll see the progression of a Solution’s architect mindset through many sample case studies:
+  * WhatIsTheTime.Com
+  * MyClothes.Com
+  * MyWordPress.Com
+  * Instantiating applications quickly
+  * Beanstalk
+
+## Stateless Web App - WhatIsTheTime.com
+* WhatIsTheTime.com allows people to know what time it is
+* **We don’t need a database**
+* We want to start small and can accept downtime
+* We want to fully scale vertically and horizontally, no downtime
+* Let’s go through the Solutions Architect journey for this app
+* Let’s see how we can proceed!
+* **Starting Simple:**
+  ![preview](./Images/aws_cloud92.png)
+  * When App is getting more traffic and certainly the T2 is not enough.
+  * Need to Scale Vertically from T2 to M5.
+* **Scaling Vertically:**
+  ![preview](./Images/aws_cloud93.png)
+  * Using Vertical Scalling, we experienced downtime.
+  * When App is more popular getting more & more traffic, need to Scale App Horizontally by increasing number of Instances.
+* **Scaling Horizontally:**
+  ![preview](./Images/aws_cloud94.png)
+  * These Instances have different Elastic IPs and Users need to remember some IPs and this is not a good approach.
+  * Improve App by removing Elastic IPs and attach DNS using Route 53 - A Record with TTL 1 Hour.
+* **Scaling Horizontally & Attach DNS using A Record:**
+  ![preview](./Images/aws_cloud95.png)
+* **Scaling Horizontally, Adding & Removing Instances:**
+  ![preview](./Images/aws_cloud96.png)
+  * Using this, when One Instance amoung these Fail, Users connected that Instance getting Downtime because of TTL 1 Hour.
+  * Users are not able to connect other Instances until TTL complete, that was not good.
+  * Overcome this by adding Load Balancer.
+  * Attach Load Balancer to DNS with Route 53 - Alias Record.
+* **Scaling Horizontally with a Load Balancer:**
+  ![preview](./Images/aws_cloud97.png)
+  * Based on load, need to add/remove Instances manually, this is not a good approach.
+  * Overcome this by adding Auto-Scaling Group instead of Adding/Removing Instances manually.
+* **Scaling Horizontally with an Auto-Scaling Group:**
+  ![preview](./Images/aws_cloud98.png)
+  * Make App highly available from disasters, enable Multi-AZ.
+* **Making our App Multi-AZ:**
+  ![preview](./Images/aws_cloud99.png)
+  * App required minimum capacity 2, for that use Reserved Instances for Cost Savings.
+* **For Minimum Capacity use Reserved Instances:**
+  ![preview](./Images/aws_cloud100.png)
+### Key Points
+* Public vs Private IP and EC2 instances
+* Elastic IP vs Route 53 vs Load Balancers
+* Route 53 TTL, A records and Alias Records
+* Maintaining EC2 instances manually vs Auto Scaling Groups
+* Multi AZ to survive disasters
+* ELB Health Checks
+* Security Group Rules
+* Reservation of capacity for costing savings when possible
+
+## Stateful Web App - MyClothes.com
+* MyClothes.com allows people to buy clothes online.
+* There’s a shopping cart 
+* Our website is having hundreds of users at the same time
+* We need to scale, maintain horizontal scalability and keep our web application as stateless as possible
+* Users should not lose their shopping cart
+* Users should have their details (address, etc) in a database
+* Let’s see how we can proceed!
+  ![preview](./Images/aws_cloud101.png)
+  * User access App and add something to Cart. When User refresh, it reach to another Instance and User lost their Cart.
+  * This is not good. Which can overcome using Stickiness of ELB feature.
+* **Introduce Stickiness (Session Affinity):**
+  ![preview](./Images/aws_cloud102.png)
+  * This can improve using User Cookies.
+* **Introduce User Cookies:**
+  ![preview](./Images/aws_cloud103.png)
+  * But using User Cookies, the HTTP requests getting heviour and also some level of Security risk.
+  * This can improve by using concept of Server Session. This works with ElastiCache by sending the Session-id of User.
+* **Introduce Server Session:**
+  ![preview](./Images/aws_cloud104.png)
+* **Storing User Data in a Database:**
+  ![preview](./Images/aws_cloud105.png)
+  * When App load is increases, more Users access App and getting product information.
+  * The read capability is increased by adding Read Replicas.
+* **Scaling Reads:**
+  ![preview](./Images/aws_cloud106.png)
+* **Scaling Reads (Alternative) – Lazy Loading:**
+  ![preview](./Images/aws_cloud107.png)
+* **Multi AZ – Survive Disasters:**
+  ![preview](./Images/aws_cloud108.png)
+* **Security Groups:**
+  ![preview](./Images/aws_cloud109.png)
+### Key Points (3-tier Architectures for Web Applications)
+* ELB sticky sessions
+* Web clients for storing cookies and making our web app stateless
+* ElastiCache
+  * For storing sessions (alternative: DynamoDB)
+  * For caching data from RDS
+  * Multi AZ
+* RDS 
+  * For storing user data
+  * Read replicas for scaling reads
+  * Multi AZ for disaster recovery
+* Tight Security with security groups referencing each other
+
+## Stateful Web App - MyWordPress.com
+* We are trying to create a fully scalable WordPress website
+* We want that website to access and correctly display picture uploads
+* Our user data, and the blog content should be stored in a MySQL database
+* Let’s see how we can achieve this!
+* **RDS layer:**
+  ![preview](./Images/aws_cloud110.png)
+* **Scaling with Aurora: Multi AZ & Read Replicas:**
+  ![preview](./Images/aws_cloud111.png)
+* **Storing images with EBS:**
+  ![preview](./Images/aws_cloud112.png)
+  ![preview](./Images/aws_cloud113.png)
+  * When User store the data, it store in Instance EBS Volume and when it redirect to another Instance, the data is not available.
+  * This can overcome using EFS.
+* **Storing images with EFS:**
+  ![preview](./Images/aws_cloud114.png)
+### Key Points
+* Aurora Database to have easy Multi-AZ and Read-Replicas
+* Storing data in EBS (single instance application)
+* Vs Storing data in EFS (distributed application)
+
+## Instantiating Applications Quickly
+* When launching a full stack (EC2, EBS, RDS), it can take time to:
+  * Install applications
+  * Insert initial (or recovery) data
+  * Configure everything
+  * Launch the application
+* We can take advantage of the cloud to speed that up!
+* EC2 Instances:
+  * **Use a Golden AMI:** Install your applications, OS dependencies etc.. beforehand and launch your EC2 instance from the Golden AMI
+  * **Bootstrap using User Data:** For dynamic configuration, use User Data scripts
+  * **Hybrid:** mix Golden AMI and User Data (Elastic Beanstalk)
+* RDS Databases:
+  * Restore from a snapshot: the database will have schemas and data ready!
+* EBS Volumes:
+  * Restore from a snapshot: the disk will already be formatted and have data!
+
+## Typical architecture - Web App 3-tier
+  ![preview](./Images/aws_cloud115.png)
+### Developer Problems on AWS
+* Managing infrastructure
+* Deploying Code
+* Configuring all the databases, load balancers, etc
+* Scaling concerns
+* Most web apps have the same architecture (ALB + ASG)
+* All the developers want is for their code to run!
+* Possibly, consistently across different applications and environments
+
+## Elastic Beanstalk
+* Elastic Beanstalk is a developer centric view of deploying an application on AWS
+* It uses all the component’s we’ve seen before: EC2, ASG, ELB, RDS, … 
+* Managed service
+  * Automatically handles capacity provisioning, load balancing, scaling, application health monitoring, instance configuration, …
+  * Just the application code is the responsibility of the developer
+* We still have full control over the configuration
+* Beanstalk is free but you pay for the underlying instances
+
+### Elastic Beanstalk – Components
+* **Application:** collection of Elastic Beanstalk components (environments, versions, configurations, …)
+* **Application Version:** an iteration of your application code
+* **Environment**
+  * Collection of AWS resources running an application version (only one application version at a time)
+  * **Tiers:** Web Server Environment Tier & Worker Environment Tier
+  * You can create multiple environments (dev, test, prod, …)
+  ![preview](./Images/aws_cloud116.png)
+
+### Elastic Beanstalk – Supported Platforms
+* Go
+* Java SE
+* Java with Tomcat
+* .NET Core on Linux
+* .NET on Windows Server 
+* Node.js
+* PHP
+* Python
+* Ruby
+* Packer Builder
+* Single Container Docker
+* Multi-container Docker
+* Preconfigured Docker
+
+### Web Server Tier vs. Worker Tier
+  ![preview](./Images/aws_cloud117.png)
+* Scale based on the number of SQS messages
+* Can push messages to SQS queue from another Web Server Tier
+
+### Elastic Beanstalk Deployment Modes
+  ![preview](./Images/aws_cloud118.png)
+
+### Create Elastic Beanstalk
+* Go to Elastic Beanstalk and click `Create application`.
+* **Step-1** `Configure environment`
+  * Select `Environment tier`
+  * Give `Application name`
+  * In Environment information,
+    * Give `Environment name`
+    * Give `Domain` or `Leave blank for autogenerated value`
+    * Give `Environment description`
+  * In Platform,
+    * Select `Platform type`
+    * Select `Platform`
+  * Select `Application code`
+  * Select `Presets`
+* **Step-2** `Configure service access`
+  * Select `Service role` (Create and use new service role)
+  * Give `Service role name`
+  * In `EC2 instance profile`, Create a Role for Beanstalk and Add to it.
+    ```
+    # Create Role: Go to IAM --> Roles --> Create role
+      * Select 'AWS service' in Trusted entity type
+      * Select 'EC2' in Use case
+      * In 'Permissions policies', add
+        * AWSElasticBeanstalkMulticontainerDocker
+        * AWSElasticBeanstalkWebTier
+        * AWSElasticBeanstalkWorkerTier
+      * Give `Role name`
+      * Click `Create role`.
+    ```
+* **Step-3**, **Step-4** & **Step-5** (optional)
+* **Step-6** `Review`
+  * Review all details and click `Submit`.
+
+#### Key Points
+* Go to Created Environment,
+  * In Events, some Events are happening and these Events are actually come from a Service CloudFormation.
+* Go to CloudFormation. In Stacks, select `awseb-stack`
+  * `Events` shows all Steps that happened.
+  * `Resources` shows Created Resources.
+  * In `Template`, click on `View in Application Composer`
+    * It shows Visually what was Created.
+* Beanstalk Environment Health is Ok, we can access it by using Domain link.
+* Upload New Version of Code
+  * Click `Upload and deploy`
+  * Choose a file and click `Deploy`.
+* To change Configuration,
+  * Go to Environment and click `Configuration` in left side menu.
+
+
+
+# Amazon S3
+* Amazon S3 is one of the main building blocks of AWS
+* It’s advertised as ”infinitely scaling” storage 
+* Many websites use Amazon S3 as a backbone
+* Many AWS services use Amazon S3 as an integration as well
+
+## S3 Use cases
+* Backup and storage
+* Disaster Recovery
+* Archive
+* Hybrid Cloud storage
+* Application hosting
+* Media hosting
+* Data lakes & big data analytics
+* Software delivery
+* Static website
+
+## S3 - Buckets
+* Amazon S3 allows people to store objects (files) in “buckets” (directories)
+* Buckets must have a **globally unique name (across all regions all accounts)**
+* Buckets are defined at the region level 
+* S3 looks like a global service but buckets are created in a region
+* Naming convention
+  * No uppercase, No underscore
+  * 3-63 characters long
+  * Not an IP
+  * Must start with lowercase letter or number
+  * Must NOT start with the prefix **xn-**
+  * Must NOT end with the suffix **-s3alias**
+
+## S3 - Objects
+* Objects (files) have a Key
+* The `key` is the **FULL** path:
+  * s3://my-bucket/`my_file.txt`
+  * s3://my-bucket/`my_folder1/another_folder/my_file.txt`
+* The key is composed of `prefix` + **object name**
+  * s3://my-bucket/`my_folder1/another_folder/`**my_file.txt**
+* There’s no concept of “directories” within buckets (although the UI will trick you to think otherwise)
+* Just keys with very long names that contain slashes (“/”)
+* Object values are the content of the body:
+  * Max. Object Size is 5TB (5000GB)
+  * If uploading more than 5GB, must use “multi-part upload”
+* Metadata (list of text key / value pairs – system or user metadata)
+* Tags (Unicode key / value pair – up to 10) – useful for security / lifecycle
+* Version ID (if versioning is enabled)
+
+## Create S3 Bucket
+* Go to Amazon S3 and click `Create bucket`
+* Select `Bucket type` (General purpose)
+* Give `Bucket name`
+* In `Block Public Access settings for this bucket`, Block or Unblock Public Access
+* Enable/Disable `Bucket Versioning`
+* In `Default encryption`, 
+  * Select `Encryption type` to `Server-side encryption with Amazon S3 managed keys (SSE-S3)`
+  * Enable `Bucket Key`
+* Click `Create bucket`.
+
+### Upload Files/Folders
+* Go to Bucket and click `Upload`
+  * Click `Add files/Add folder` based on requirement
+  * `Add files/Add folder` and click `Upload`.
+* Click on that Added File
+  * Click `Open` to see the file
+  * `Object URL` is used to access the file from Internet.
+
+## S3 – Security
+* **User-Based**
+  * **IAM Policies** – which API calls should be allowed for a specific user from IAM
+* **Resource-Based**
+  * **Bucket Policies** – bucket wide rules from the S3 console - allows cross account
+  * **Object Access Control List (ACL)** – finer grain (can be disabled)
+  * **Bucket Access Control List (ACL)** – less common (can be disabled)
+* **Note:** an IAM principal can access an S3 object if
+  * The user IAM permissions ALLOW it OR the resource policy ALLOWS it
+  * AND there’s no explicit DENY
+* **Encryption:** encrypt objects in Amazon S3 using encryption keys
+
+### S3 Bucket Policies
+* JSON based policies
+  * Resources: buckets and objects
+  * Effect: Allow / Deny
+  * Actions: Set of API to Allow or Deny
+  * Principal: The account or user to apply the policy to
+* Use S3 bucket for policy to:
+  * Grant public access to the bucket
+  * Force objects to be encrypted at upload
+  * Grant access to another account (Cross Account)
+  ![preview](./Images/aws_cloud119.png)
+* **Examples:**
+  * **Public Access - Use Bucket Policy:**
+    ![preview](./Images/aws_cloud120.png)
+  * **User Access to S3 – IAM Permissions:**
+    ![preview](./Images/aws_cloud121.png)
+  * **EC2 Instance Access - Use IAM Roles:**
+    ![preview](./Images/aws_cloud122.png)
+  * **Cross-Account Access – Use Bucket Policy**
+    ![preview](./Images/aws_cloud123.png)
+
+### Bucket Settings for Block Public Access
+  ![preview](./Images/aws_cloud124.png)
+* **These settings were created to prevent company data leaks**
+* If you know your bucket should never be public, leave these on
+* Can be set at the account level
+
+### Enable Public Access
+* When Objects in Bucket are not accessable from Internet, means it blocks the Public Access. Need to change Permissions
+  * Go to S3 Bucket `Permissions`
+  * In `Block public access`, Disable `Block all public access`
+  * In `Bucket policy`, click `Edit`
+    * Click `Policy generator`
+    * **Step-1:** `Select Policy Type`
+      * In `Select Type of Policy`, select `S3 Bucket Policy`
+    * **Step-2:** `Add Statement(s)`
+      * In `Effect`, select `Allow`
+      * In `Principal`, give `*`
+      * In `Actions`, select `GetObject`
+      * In `Amazon Resource Name (ARN)`, copy Bucket ARN and give it with `/*`
+      * Then click `Add Statement`
+    * **Step-3:** `Generate Policy`
+      * Click `Generate Policy` and copy Generate Policy.
+    * Paste in Bucket Policy and click `Save changes`.
+
+## S3 – Static Website Hosting
+* S3 can host static websites and have them accessible on the Internet
+* The website URL will be (depending on the region)
+  * **http://bucket-name.s3-website-aws-region.amazonaws.com**
+<center>OR</center>
+
+  * **http://bucket-name.s3-website.aws-region.amazonaws.com**
+* If you get a **403 Forbidden** error, make sure the bucket policy allows public reads!
+  ![preview](./Images/aws_cloud125.png)
+
+### Create Static Website Hosting
+* Go to S3 Bucket `Properties`
+* In `Static website hosting`, click `Edit`
+  * `Enable` Static website hosting
+  * In `Hosting type`, select `Host a static website`
+  * In `Index document`, give `index.html`
+  * Click `Save changes`
+* In Bucket, Upload `index.html` file
+* In Static website hosting, shows the `Bucket website endpoint`
+  * This endpoint is used to access the Website.
+
+## S3 - Versioning
+* You can version your files in Amazon S3
+* It is enabled at the **bucket level**
+* Same key overwrite will change the “version”: 1, 2, 3….
+* It is best practice to version your buckets
+  * Protect against unintended deletes (ability to restore a version)
+  * Easy roll back to previous version 
+* Notes:
+  * Any file that is not versioned prior to enabling versioning will have version “null”
+  * Suspending versioning does not delete the previous versions
+  ![preview](./Images/aws_cloud126.png)
+
+### Enable Versioning
+* Go to S3 Bucket `Properties`
+  * In `Bucket Versioning`, click `Edit`
+  * `Enable` Bucket Versioning and click `Save changes`.
+* When we Upload the New Version of File, but we required Old Version of File
+  * Click `Show versions`
+  * Select New File and click Delete, it permanently delete the file.
+  * Then we go back to Previous Version.
+* When we delete any file and it is available in Previous Version. It doesn't delete permanently.
+  * Click `Show versions`
+  * The deleted file shows like `Delete marker`
+  * When we delete that file, we recover that file from previous Version.
+
+## S3 – Replication (CRR & SRR)
+* **Must enable Versioning** in source and destination buckets
+* **Cross-Region Replication (CRR)**
+* **Same-Region Replication (SRR)**
+* Buckets can be in different AWS accounts
+* Copying is asynchronous
+* Must give proper IAM permissions to S3
+* Use cases:
+  * **CRR** – compliance, lower latency access, replication across accounts
+  * **SRR** – log aggregation, live replication between production and test accounts
+  ![preview](./Images/aws_cloud127.png)
+* After you enable Replication, only new objects are replicated
+* Optionally, you can replicate existing objects using **S3 Batch Replication**
+  * Replicates existing objects and objects that failed replication
+* For DELETE operations
+  * **Can replicate delete markers** from source to target (optional setting)
+  * Deletions with a version ID are not replicated (to avoid malicious deletes)
+* **There is no “chaining” of replication**
+  * If bucket 1 has replication into bucket 2, which has replication into bucket 3
+  * Then objects created in bucket 1 are not replicated to bucket 3
+
+### Enable Replication
+* We required Two Buckets with Versioning is Enabled. (Buckets with Same Region or Different Regions, based on requirement)
+* Assume One Bucket is Source Bucket and Another Bucket is Destination Bucket.
+* To enable Replication, go to Source Bucket `Management`.
+  * In Replication rules, click `Create replication rule`
+    * Give `Replication rule name`
+    * Enable `Status`
+    * In Source bucket, `Choose a rule scope`
+    * Select `Destination`
+    * In IAM role, select `Create new role`
+    * Click `Save`
+  * A popup `Replicate existing objects?` is opens, in that select required one and click `Submit`.
+* When we Upload any files in Source Bucket, it replicate to Destination Bucket.
+* When `Delete marker replication` is Enable, it replicates only `Delete Marker Files` and Not replicate `Permanently Deleted Files`.
+  * Go to Replication Rule and click `Edit`
+  * In `Additional replication options`, enable `Delete marker replication`
+  * Click `Save`
+
+## S3 Durability and Availability
+* Durability:
+  * High durability (99.999999999%, 11 9’s) of objects across multiple AZ
+  * If you store 10,000,000 objects with Amazon S3, you can on average expect to incur a loss of a single object once every 10,000 years
+  * Same for all storage classes
+* Availability:
+  * Measures how readily available a service is
+  * Varies depending on storage class
+  * Example: S3 standard has 99.99% availability = not available 53 minutes a year
+
+## S3 Storage Classes
+* S3 Storage Classes are
+  * S3 Standard - General Purpose
+  * S3 Standard-Infrequent Access (IA)
+  * S3 One Zone-Infrequent Access
+  * S3 Glacier Instant Retrieval
+  * S3 Glacier Flexible Retrieval
+  * S3 Glacier Deep Archive
+  * S3 Intelligent Tiering
+* Can move between classes manually or using S3 Lifecycle configurations
+
+### S3 Standard – General Purpose
+* 99.99% Availability
+* Used for frequently accessed data
+* Low latency and high throughput
+* Sustain 2 concurrent facility failures
+* Use Cases: Big Data analytics, mobile & gaming applications, content distribution…
+
+### S3 Infrequent Access Storage Classes
+* For data that is less frequently accessed, but requires rapid access when needed
+* Lower cost than S3 Standard
+* **Amazon S3 Standard-Infrequent Access (S3 Standard-IA)**
+  * 99.9% Availability
+  * Use cases: Disaster Recovery, backups
+* **Amazon S3 One Zone-Infrequent Access (S3 One Zone-IA)**
+  * High durability (99.999999999%) in a single AZ; data lost when AZ is destroyed
+  * 99.5% Availability
+  * Use Cases: Storing secondary backup copies of on-premises data, or data you can recreate
+
+### S3 Glacier Storage Classes
+* Low-cost object storage meant for archiving / backup
+* Pricing: price for storage + object retrieval cost
+* **Amazon S3 Glacier Instant Retrieval**
+  * Millisecond retrieval, great for data accessed once a quarter
+  * Minimum storage duration of 90 days
+* **Amazon S3 Glacier Flexible Retrieval** (formerly Amazon S3 Glacier):
+  * Expedited (1 to 5 minutes), Standard (3 to 5 hours), Bulk (5 to 12 hours) – free
+  * Minimum storage duration of 90 days
+* **Amazon S3 Glacier Deep Archive – for long term storage:**
+  * Standard (12 hours), Bulk (48 hours)
+  * Minimum storage duration of 180 days
+
+### S3 Intelligent-Tiering
+* Small monthly monitoring and auto-tiering fee
+* Moves objects automatically between Access Tiers based on usage
+* There are no retrieval charges in S3 Intelligent-Tiering
+* Frequent Access tier (automatic): default tier
+* Infrequent Access tier (automatic): objects not accessed for 30 days
+* Archive Instant Access tier (automatic): objects not accessed for 90 days
+* Archive Access tier (optional): configurable from 90 days to 700+ days
+* Deep Archive Access tier (optional): config. from 180 days to 700+ days
+
+### Change Objects Storage Classes
+* **During Upload Files,**
+  * We have an option `Properties`
+  * In that `Storage class` are available
+  * Select required Class and click `Upload`
+* **After Uploading Files, we can change Storage Class:**
+  * Open that File and go to `Properties`
+  * In `Storage class`, click `Edit`
+  * Select required Storage Class and click `Save changes`
+* **Automate Objects Moving to different Storage Classes:**
+  * Go to Bucket `Management`
+  * In Lifecycle rules, click `Create lifecycle rule`
+  * Give `Lifecycle rule name`
+  * `Choose a rule scope`
+  * In `Lifecycle rule actions`, select `Transition current versions of objects between storage classes`
+  * Provide `Transition current versions of objects between storage classes`
+    * `Choose storage class transitions`
+    * `Days after object creation`
+    * We can `Add Multiple transition`
+  * Then click `Create rule`
+
+## Moving between Storage Classes
+* You can transition objects between storage classes 
+* For infrequently accessed object, move them to **Standard IA**
+* For archive objects that you don’t need fast access to, move them to **Glacier or Glacier Deep Archive**
+* Moving objects can be automated using a **Lifecycle Rules**
+  ![preview](./Images/aws_cloud129.png)
+
+### Lifecycle Rules
+* **Transition Actions** – configure objects to transition to another storage class
+  * Move objects to Standard IA class 60 days after creation
+  * Move to Glacier for archiving after 6 months
+* **Expiration actions** – configure objects to expire (delete) after some time
+  * Access log files can be set to delete after a 365 days
+  * **Can be used to delete old versions of files (if versioning is enabled)**
+  * Can be used to delete incomplete Multi-Part uploads
+* Rules can be created for a certain prefix (example: s3://mybucket/mp3/*)
+* Rules can be created for certain objects Tags (example: Department: Finance)
+#### Lifecycle Rules (Scenario 1)
+* Your application on EC2 creates images thumbnails after profile photos are uploaded to Amazon S3. These thumbnails can be easily recreated, and only need to be kept for 60 days. The source images should be able to be immediately retrieved for these 60 days, and afterwards, the user can wait up to 6 hours. How would you design this?
+  * S3 source images can be on **Standard**, with a lifecycle configuration to transition them to **Glacier** after 60 days
+  * S3 thumbnails can be on **One-Zone IA**, with a lifecycle configuration to expire them (delete them) after 60 days
+#### Lifecycle Rules (Scenario 2)
+* A rule in your company states that you should be able to recover your deleted S3 objects immediately for 30 days, although this may happen rarely. After this time, and for up to 365 days, deleted objects should be recoverable within 48 hours.
+  * **Enable S3 Versioning** in order to have object versions, so that “deleted objects” are in fact hidden by a “delete marker” and can be recovered
+  * Transition the “noncurrent versions” of the object to **Standard IA**
+  * Transition afterwards the “noncurrent versions” to **Glacier Deep Archive**
+
+### Create Lifecycle Rule
+* Go to Bucket `Management`
+* In Lifecycle rules, click `Create lifecycle rule`
+* Give `Lifecycle rule name`
+* `Choose a rule scope`
+* Select required `Lifecycle rule actions`
+  * **Transition current versions of objects between storage classes**: For Latest Version of Objects
+    * `Choose storage class transitions`
+    * Provide `Days after object creation`
+  * **Transition noncurrent versions of objects between storage classes:** For All Previous Version of Objects
+    * `Choose storage class transitions`
+    * Provide `Days after objects become noncurrent`
+  * **Expire current versions of objects:** Automatically Deletes the Latest Version of Objects
+    * Provide `Days after object creation`
+  * **Permanently delete noncurrent versions of objects:** Removes the Older Version of Objects
+    * Provide `Days after objects become noncurrent`
+* Check `Review transition and expiration actions`
+* Then click `Create rule`.
+
+## S3 Analytics – Storage Class Analysis
+* Help you decide when to transition objects to the right storage class
+* Recommendations for **Standard** and **Standard IA**
+  * Does NOT work for One-Zone IA or Glacier
+* Report is updated daily
+* 24 to 48 hours to start seeing data analysis
+* Good first step to put together Lifecycle Rules (or improve them)!
+  ![preview](./Images/aws_cloud130.png)
+
+## S3 – Requester Pays
+* In general, bucket owners pay for all Amazon S3 storage and data transfer costs associated with their bucket
+* **With Requester Pays buckets**, the requester instead of the bucket owner pays the cost of the request and the data download from the bucket
+* Helpful when you want to share large datasets with other accounts
+* The requester must be authenticated in AWS (cannot be anonymous)
+  ![preview](./Images/aws_cloud131.png)
+
+## S3 Event Notifications
+* S3:ObjectCreated, S3:ObjectRemoved, S3:ObjectRestore, S3:Replication…
+* Object name filtering possible (*.jpg)
+* Use case: generate thumbnails of images uploaded to S3
+* **Can create as many “S3 events” as desired**
+* S3 event notifications typically deliver events in seconds but can sometimes take a minute or longer
+  ![preview](./Images/aws_cloud132.png)
+* **S3 Event Notifications – IAM Permissions:**
+  ![preview](./Images/aws_cloud133.png)
+* **S3 Event Notifications with Amazon EventBridge:**
+  ![preview](./Images/aws_cloud134.png)
+  * **Advanced filtering** options with JSON rules (metadata, object size, name...)
+  * **Multiple Destinations** – ex Step Functions, Kinesis Streams / Firehose…
+  * **EventBridge Capabilities** – Archive, Replay Events, Reliable delivery
+
+### Setup S3 Event Notifications
+* Go to Bucket `Properties`
+* In `Amazon EventBridge`, click `Edit`
+  * `On` - Send notifications to Amazon EventBridge for all events in this bucket
+  * Click `Save changes`
+* In `Event notifications`, click `Create event notification`
+  * Give `Event name`
+  * Select `Event types` to Send Notifications
+  * Select `Destination` (Consider `SQS queue` is Destination)
+    * In `Specify SQS queue`, select `Choose from your SQS queues`
+    * Choose `SQS queue`
+
+### Create SQS Queue
+* Go to Amazon SQS and click `Create queue`
+  * Select `Type` (Standard)
+  * Give `Name`
+  * Click `Create queue`
+* Open Created Queue and click `Edit`
+  * In `Access policy`, click `Policy generator`
+  * **Step-1** `Select Policy Type`
+    * Select Type of Policy: `SQS Queue Policy`
+  * **Step-2** `Add Statement(s)`
+    * Effect: `Allow`
+    * Principal: `*`
+    * Actions: `SendMessage`
+    * Amazon Resource Name (ARN): `Copy from Previous Access Policy`
+    * Click `Add Statement`
+  * **Step-3** `Generate Policy`
+    * Click `Generate Policy`
+    * Copy Policy and Add in SQS Queue `Access policy`
+  * Click `Save`
+* Go to Created Queue and click `Send and receive messages`
+  * Click `Poll for messages`
+  * In `Messages`, click on `Id` to check Details of particular Message.
+  * When you do any operations related Objects, a New Message was Created with relevent Operation.
+  * You need to click `Poll for messages` everytime.
+  * Click on `Message Id` to check Details.
+
+## S3 Baseline Performance
+* Amazon S3 automatically scales to high request rates, latency 100-200 ms
+* Your application can achieve at least **3,500 PUT/COPY/POST/DELETE or 5,500 GET/HEAD requests per second per prefix in a bucket**
+* There are no limits to the number of prefixes in a bucket. 
+* Example (object path => prefix):
+  * bucket/folder1/sub1/file  => /folder1/sub1/
+  * bucket/folder1/sub2/file  => /folder1/sub2/
+  * bucket/1/file             => /1/
+  * bucket/2/file             => /2/
+* If you spread reads across all four prefixes evenly, you can achieve 22,000 requests per second for GET and HEAD
+
+### S3 Performance
+* **Multi-Part upload:**
+  * recommended for files > 100MB, must use for files > 5GB
+  * Can help parallelize uploads (speed up transfers)
+  ![preview](./Images/aws_cloud135.png)
+* **S3 Transfer Acceleration** 
+  * Increase transfer speed by transferring file to an AWS edge location which will forward the data to the S3 bucket in the target region
+  * Compatible with multi-part upload
+  ![preview](./Images/aws_cloud136.png)
+
+### S3 Performance – S3 Byte-Range Fetches
+* Parallelize GETs by requesting specific byte ranges
+* Better resilience in case of failures
+  ![preview](./Images/aws_cloud137.png)
+
+## S3 Batch Operations
+* Perform bulk operations on existing S3 objects with a single request, example:
+  * Modify object metadata & properties
+  * Copy objects between S3 buckets
+  * **Encrypt un-encrypted objects**
+  * Modify ACLs, tags
+  * Restore objects from S3 Glacier
+  * Invoke Lambda function to perform custom action on each object
+* A job consists of a list of objects, the action to perform, and optional parameters
+* S3 Batch Operations manages retries, tracks progress, sends completion notifications, generate reports …
+* **You can use S3 Inventory to get object list and use S3 Select to filter your objects**
+  ![preview](./Images/aws_cloud138.png)
+
+## S3 – Storage Lens
+* Understand, analyze, and optimize storage across entire AWS Organization
+* Discover anomalies, identify cost efficiencies, and apply data protection best practices across entire AWS Organization (30 days usage & activity metrics)
+* Aggregate data for Organization, specific accounts, regions, buckets, or prefixes
+* Default dashboard or create your own dashboards
+* Can be configured to export metrics daily to an S3 bucket (CSV, Parquet)
+  ![preview](./Images/aws_cloud139.png)
+
+### Storage Lens – Default Dashboard
+* Visualize summarized insights and trends for both free and advanced metrics
+* Default dashboard shows Multi-Region and Multi-Account data
+* Preconfigured by Amazon S3
+* Can’t be deleted, but can be disabled
+* [Refer Here](https://aws.amazon.com/blogs/aws/s3-storage-lens/) for Official docs.
+  ![preview](./Images/aws_cloud140.png)
+
+### Storage Lens – Metrics
+* **Summary Metrics**
+  * General insights about your S3 storage
+  * StorageBytes, ObjectCount…
+  * Use cases: identify the fastest-growing (or not used) buckets and prefixes
+* **Cost-Optimization Metrics**
+  * Provide insights to manage and optimize your storage costs
+  * NonCurrentVersionStorageBytes, IncompleteMultipartUploadStorageBytes…
+  * Use cases: identify buckets with incomplete multipart uploaded older than 7 days, Identify which objects could be transitioned to lower-cost storage class
+* **Data-Protection Metrics**
+  * Provide insights for data protection features
+  * VersioningEnabledBucketCount, MFADeleteEnabledBucketCount, SSEKMSEnabledBucketCount, CrossRegionReplicationRuleCount…
+  * Use cases: identify buckets that aren’t following data-protection best practices
+* **Access-management Metrics**
+  * Provide insights for S3 Object Ownership
+  * ObjectOwnershipBucketOwnerEnforcedBucketCount…
+  * Use cases: identify which Object Ownership settings your buckets use
+* **Event Metrics**
+  * Provide insights for S3 Event Notifications
+  * EventNotificationEnabledBucketCount (identify which buckets have S3 Event Notifications configured)
+* **Performance Metrics**
+  * Provide insights for S3 Transfer Acceleration
+  * TransferAccelerationEnabledBucketCount (identify which buckets have S3 Transfer Acceleration enabled)
+* **Activity Metrics**
+  * Provide insights about how your storage is requested
+  * AllRequests, GetRequests, PutRequests, ListRequests, BytesDownloaded…
+* **Detailed Status Code Metrics**
+  * Provide insights for HTTP status codes
+  * 200OKStatusCount, 403ForbiddenErrorCount, 404NotFoundErrorCount…
+
+### Storage Lens – Free vs. Paid
+* **Free Metrics**
+  * Automatically available for all customers
+  * Contains around 28 usage metrics
+  * Data is available for queries for 14 days
+* **Advanced Metrics and Recommendations**
+  * Additional paid metrics and features
+  * **Advanced Metrics** – Activity, Advanced Cost Optimization, Advanced Data Protection, Status Code
+  * **CloudWatch Publishing** – Access metrics in CloudWatch without additional charges
+  * **Prefix Aggregation** – Collect metrics at the prefix level
+  * Data is available for queries for 15 months
+
+## S3 Security - Object Encryption
+* You can encrypt objects in S3 buckets using one of 4 methods
+* **Server-Side Encryption (SSE)**
+  * **Server-Side Encryption with Amazon S3-Managed Keys (SSE-S3) - Enabled by Default**
+    * Encrypts S3 objects using keys handled, managed, and owned by AWS
+  * **Server-Side Encryption with KMS Keys stored in AWS KMS (SSE-KMS)**
+    * Leverage AWS Key Management Service (AWS KMS) to manage encryption keys
+  * **Server-Side Encryption with Customer-Provided Keys (SSE-C)**
+    * When you want to manage your own encryption keys
+* **Client-Side Encryption**
+* It’s important to understand which ones are for which situation.
+
+### S3 Encryption – SSE-S3
+* Encryption using keys handled, managed, and owned by AWS
+* Object is encrypted server-side
+* Encryption type is **AES-256**
+* Must set header **"x-amz-server-side-encryption": "AES256"**
+* **Enabled by default for new buckets & new objects**
+  ![preview](./Images/aws_cloud141.png)
+
+### S3 Encryption – SSE-KMS
+* Encryption using keys handled and managed by AWS KMS (Key Management Service)
+* KMS advantages: user control + audit key usage using CloudTrail
+* Object is encrypted server side
+* Must set header **"x-amz-server-side-encryption": "aws:kms"**
+  ![preview](./Images/aws_cloud142.png)
+#### SSE-KMS Limitation
+* If you use SSE-KMS, you may be impacted by the KMS limits 
+* When you upload, it calls the **GenerateDataKey** KMS API
+* When you download, it calls the **Decrypt** KMS API
+* Count towards the KMS quota per second (5500, 10000, 30000 req/s based on region)
+* You can request a quota increase using the Service Quotas Console
+  ![preview](./Images/aws_cloud143.png)
+
+### S3 Encryption – SSE-C
+* Server-Side Encryption using keys fully managed by the customer outside of AWS
+* Amazon S3 does **NOT** store the encryption key you provide
+* **HTTPS must be used**
+* Encryption key must provided in HTTP headers, for every HTTP request made
+  ![preview](./Images/aws_cloud144.png)
+
+### S3 Encryption – Client-Side Encryption
+* Use client libraries such as **Amazon S3 Client-Side Encryption Library**
+* Clients must encrypt data themselves before sending to Amazon S3
+* Clients must decrypt data themselves when retrieving from Amazon S3
+* Customer fully manages the keys and encryption cycle
+  ![preview](./Images/aws_cloud145.png)
+
+### S3 – Encryption in transit (SSL/TLS)
+* Encryption in flight is also called SSL/TLS 
+* Amazon S3 exposes two endpoints:
+  * **HTTP Endpoint** – non encrypted
+  * **HTTPS Endpoint** – encryption in flight
+* **HTTPS is recommended**
+* **HTTPS is mandatory for SSE-C**
+* Most clients would use the HTTPS endpoint by default
+
+### S3 – Force Encryption in Transit aws:SecureTransport
+  ![preview](./Images/aws_cloud146.png)
+
+### S3 – Default Encryption vs. Bucket Policies
+* **SSE-S3 encryption is automatically applied to new objects stored in S3 bucket**
+* Optionally, you can “force encryption” using a bucket policy and refuse any API call to PUT an S3 object without encryption headers (SSE-KMS or SSE-C)
+  ![preview](./Images/aws_cloud147.png)
+* **Note: Bucket Policies are evaluated before “Default Encryption”**
+
+### Hands-on Encryption
+* Create S3 Bucket with Versioning Enabled.
+* Every Bucket has by default Encryption is Enabled (SSE-S3).
+* **Change Encryption of Objects in Bucket:**
+  * Open Uploaded File
+  * In `Properties`, navigate to `Server-side encryption settings` and click `Edit`
+    * In `Encryption settings`, select `Override bucket settings for default encryption`
+    * Select `Encryption type`, (SSE-KMS)
+    * In AWS KMS key, `Choose from your AWS KMS keys`
+    * Select `Available AWS KMS keys`
+  * Then click `Save changes`.
+  * When we Change the Encryption Type, ir creates a New Version of Object.
+  * Now we have Two Versions for that Object
+    1. Encryption Type `-->` SSE-S3
+    2. Encryption Type `-->` SSE-KMS
+* **Choose Encryption Type during Object Upload:**
+  * Click `Upload` and `Add file`
+  * Go to `Properties` `-->` `Server-side encryption`
+    * Select `Specify an encryption key`
+    * In `Encryption settings`, select `Override bucket settings for default encryption`
+    * Select `Encryption type`
+* **Change Bucket Encryption:**
+  * Go to Bucket `Properties`
+  * Navigate to `Default encryption`, click `Edit`
+  * Select required `Encryption type`
+
+## CORS (Cross-Origin Resource Sharing)
+* **Origin = scheme (protocol) + host (domain) + port**
+  * example: https://www.example.com (implied port is 443 for HTTPS, 80 for HTTP)
+* **Web Browser** based mechanism to allow requests to other origins while visiting the main origin
+* Same origin: http://example.com/app1 & http://example.com/app2
+* Different origins: http://www.example.com & http://other.example.com
+* The requests won’t be fulfilled unless the other origin allows for the requests, using **CORS Headers** (example: **Access-Control-Allow-Origin**)
+  ![preview](./Images/aws_cloud148.png)
+
+### S3 – CORS (Cross-Origin Resource Sharing)
+* If a client makes a cross-origin request on our S3 bucket, we need to enable the correct CORS headers
+* You can allow for a specific origin or for * (all origins)
+  ![preview](./Images/aws_cloud149.png)
+
+### Enable CORS (Cross-Origin Resource Sharing) in S3
+* Go to Destination S3 Bucket `Permissions` (Where the Files need to access from Other Region Servers) 
+* Naviagate to `Cross-origin resource sharing (CORS)` and click `Edit`
+  * Add below JSON Data
+    ```json
+    [
+        {
+            "AllowedHeaders": [
+                "Authorization"
+            ],
+            "AllowedMethods": [
+                "GET"
+            ],
+            "AllowedOrigins": [
+                "<url of first bucket with http://...without slash at the end>"
+            ],
+            "ExposeHeaders": [],
+            "MaxAgeSeconds": 3000
+        }
+    ]
+    ```
+      * `AllowedOrigins` is `*`, it allows all Domains.
+  * Then click `Save changes`.
+
+## S3 – MFA Delete
+* **MFA (Multi-Factor Authentication)** – force users to generate a code on a device (usually a mobile phone or hardware) before doing important operations on S3
+* MFA will be required to:
+  * Permanently delete an object version
+  * Suspend Versioning on the bucket
+* MFA won’t be required to:
+  * Enable Versioning
+  * List deleted versions
+* To use MFA Delete, **Versioning must be enabled** on the bucket
+* **Only the bucket owner (root account) can enable/disable MFA Delete**
+
+### Enable MFA Delete
+* Go to Bucket `Properties`. In `Bucket Versioning`, shows `Multi-factor authentication (MFA) delete`
+  * By default `Multi-factor authentication (MFA) delete` was `Disabled`
+  * We cann't Enable through AWS Console and need to use `AWS CLI`
+* `MFA` should be setup for Root Account and create `Access Keys` for Root Account
+* Configure `AWS CLI` using Root Account Access Keys
+* Then Enable S3 MFA Delete using below command
+  ```
+  aws s3api put-bucket-versioning --bucket <Bucket-Name> --versioning-configuration Status=Enabled,MFADelete=Enabled --mfa "<arn-of-MFA-device> <MFA-Code>"
+  ```
+  * **ARN-of-MFA-Device**
+    * Go to `Security Credentials` of Root Account
+    * Provide `Identifier` of MFA Device
+* Then go to Bucket `Properties` `-->` `Bucket Versioning`, in that `Multi-factor authentication (MFA) delete` was `Enabled`
+* By `Enabled` the `Multi-factor authentication (MFA) delete`, we are not able to delete file permanently.
+* To Disable S3 MFA Delete using below command
+  ```
+  aws s3api put-bucket-versioning --bucket <Bucket-Name> --versioning-configuration Status=Enabled,MFADelete=Disabled --mfa "<arn-of-MFA-device> <MFA-Code>"
+  ```
+
+## S3 Access Logs
+* For audit purpose, you may want to log all access to S3 buckets
+* Any request made to S3, from any account, authorized or denied, will be logged into another S3 bucket
+* That data can be analyzed using data analysis tools…
+* The target logging bucket must be in the same AWS region
+* [Refer Here](https://docs.aws.amazon.com/AmazonS3/latest/userguide/LogFormat.html) for Official docs.
+  ![preview](./Images/aws_cloud150.png)
+* **S3 Access Logs - Warning:**
+  * Do not set your logging bucket to be the monitored bucket
+  * It will create a logging loop, and **your bucket will grow exponentially**
+    ![preview](./Images/aws_cloud151.png)
+
+### Enable S3 Access Logs
+* Create a Separate Bucket for Logs.
+* Go to Source Bucket `Properties` (Which Bucket Logs we want to Store)
+* Navigate to `Server access logging` and click `Edit`
+  * `Enable` Server access logging
+  * Select `Destination` Bucket
+  * Choose `Log object key format`
+* Then Access Logs of Source Bucket was Stored in Destination Bucket.
+
+## S3 – Pre-Signed URLs
+* Generate pre-signed URLs using the **S3 Console, AWS CLI** or **SDK**
+* **URL Expiration**
+  * **S3 Console** – 1 min up to 720 mins (12 hours)
+  * **AWS CLI** – configure expiration with --expires-in parameter in seconds (default 3600 secs, max. 604800 secs ~ 168 hours)
+* Users given a pre-signed URL inherit the permissions of the user that generated the URL for GET / PUT
+* Examples: 
+  * Allow only logged-in users to download a premium video from your S3 bucket
+  * Allow an ever-changing list of users to download files by generating URLs dynamically
+  * Allow temporarily a user to upload a file to a precise location in your S3 bucket
+  ![preview](./Images/aws_cloud152.png)
+
+### Assign Pre-Signed URLs for Objects
+* Open Object and click `Object actions --> Share with a presigned URL`
+* Provide `Time interval until the presigned URL expires`
+* Click `Create presigned URL`
+* Click `Copy presigned URL` and provide this URL to Users who want to access Object.
+
+## S3 Glacier Vault Lock
+* Adopt a WORM (Write Once Read Many) model
+* Create a Vault Lock Policy
+* Lock the policy for future edits (can no longer be changed or deleted)
+* Helpful for compliance and data retention
+  ![preview](./Images/aws_cloud153.png)
+
+## S3 Object Lock (versioning must be enabled)
+* Adopt a WORM (Write Once Read Many) model
+* Block an object version deletion for a specified amount of time
+* **Retention mode - Compliance:**
+  * Object versions can't be overwritten or deleted by any user, including the root user
+  * Objects retention modes can't be changed, and retention periods can't be shortened
+* **Retention mode - Governance:** 
+  * Most users can't overwrite or delete an object version or alter its lock settings 
+  * Some users have special permissions to change the retention or delete the object
+* **Retention Period:** protect the object for a fixed period, it can be extended 
+* **Legal Hold:** 
+  * protect the object indefinitely, independent from retention period
+  * can be freely placed and removed using the `s3:PutObjectLegalHold` IAM permission
+
+## S3 – Access Points
+  ![preview](./Images/aws_cloud154.png)
+* Access Points simplify security management for S3 Buckets
+* Each Access Point has:
+  * its own DNS name (Internet Origin or VPC Origin)
+  * an access point policy (similar to bucket policy) – manage security at scale
+
+### S3 – Access Points – VPC Origin
+* We can define the access point to be accessible only from within the VPC
+* You must create a VPC Endpoint to access the Access Point (Gateway or Interface Endpoint)
+* The VPC Endpoint Policy must allow access to the target bucket and Access Point
+  ![preview](./Images/aws_cloud155.png)
+
+## S3 Object Lambda
+* Use AWS Lambda Functions to change the object before it is retrieved by the caller application
+* Only one S3 bucket is needed, on top of which we create **S3 Access Point** and **S3 Object Lambda Access Points**. 
+* Use Cases:
+  * Redacting personally identifiable information for analytics or non-production environments.
+  * Converting across data formats, such as converting XML to JSON.
+  * Resizing and watermarking images on the fly using caller-specific details, such as the user who requested the object.
+  ![preview](./Images/aws_cloud156.png)
