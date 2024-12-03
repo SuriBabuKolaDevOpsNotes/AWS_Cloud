@@ -3897,3 +3897,358 @@
 * **DataSync:** Schedule data sync from on-premises to AWS, or AWS to AWS
 * **Snowcone / Snowball / Snowmobile:** to move large amount of data to the cloud, physically
 * **Database:** for specific workloads, usually with indexing and querying
+
+
+
+# AWS Integration & Messaging (SQS, SNS & Kinesis)
+* When we start deploying multiple applications, they will inevitably need to communicate with one another
+* There are two patterns of application communication
+  ![preview](./Images/aws_cloud188.png)
+* Synchronous between applications can be problematic if there are sudden spikes of traffic
+* What if you need to suddenly encode 1000 videos but usually it’s 10?
+* In that case, it’s better to **decouple** your applications, 
+  * using SQS: queue model
+  * using SNS: pub/sub model
+  * using Kinesis: real-time streaming model
+* These services can scale independently from our application!
+
+## Amazon SQS
+* **What’s a queue?**
+  ![preview](./Images/aws_cloud189.png)
+
+### SQS - Standard Queue
+* Oldest offering (over 10 years old)
+* Fully managed service, used to **decouple applications**
+* Attributes:
+  * Unlimited throughput, unlimited number of messages in queue
+  * Default retention of messages: 4 days, maximum of 14 days
+  * Low latency (<10 ms on publish and receive)
+  * Limitation of 256KB per message sent
+* Can have duplicate messages (at least once delivery, occasionally)
+* Can have out of order messages (best effort ordering)
+
+### SQS - Producing Messages
+* Produced to SQS using the SDK (SendMessage API)
+* The message is **persisted** in SQS until a consumer deletes it
+* Message retention: default 4 days, up to 14 days
+* Example: send an order to be processed 
+  * Order id
+  * Customer id
+  * Any attributes you want 
+* SQS standard: unlimited throughput
+  ![preview](./Images/aws_cloud190.png)
+
+### SQS - Consuming Messages
+* Consumers (running on EC2 instances, servers, or AWS Lambda)…
+* Poll SQS for messages (receive up to 10 messages at a time)
+* Process the messages (example: insert the message into an RDS database)
+* Delete the messages using the DeleteMessage API
+  ![preview](./Images/aws_cloud191.png)
+* **SQS – Multiple EC2 Instances Consumers:**
+  * Consumers receive and process messages in parallel
+  * At least once delivery
+  * Best-effort message ordering
+  * Consumers delete messages after processing them
+  * We can scale consumers horizontally to improve throughput of processing
+  ![preview](./Images/aws_cloud192.png)
+
+### SQS - Security
+* **Encryption:**
+  * In-flight encryption using HTTPS API
+  * At-rest encryption using KMS keys
+  * Client-side encryption if the client wants to perform encryption/decryption itself 
+* **Access Controls:** IAM policies to regulate access to the SQS API
+* **SQS Access Policies** (similar to S3 bucket policies)
+  * Useful for cross-account access to SQS queues
+  * Useful for allowing other services (SNS, S3…) to write to an SQS queue
+
+### Create Queue
+* Go to SQS and click `Create queue`
+  * Select `Type` and give `Name`
+  * Provide `Configuration`
+  * Select `Encryption`
+  * Define `Access policy`
+  * Provide `Tags`
+  * Click `Create queue`
+#### Key Points
+* Open created Queue and click `Send and receive messages`
+  * In `Send message`, give `Message body` and click `Send message`
+  * In `Receive messages`, click `Poll for messages` for getting Messages
+  * In `Messages`, click on Message Id to View that Message
+  * Select Message and click `Delete`
+    * It means, we signaled the SQS that the Message has been successfully processed.
+    * When we click `Poll for messages`, we not receive that Message again because we deleted it
+* Open created Queue and click `Purge`
+  * It deletes all the Messages from the Queue
+
+### SQS – Message Visibility Timeout
+* After a message is polled by a consumer, it becomes **invisible** to other consumers
+* By default, the “message visibility timeout” is **30 seconds**
+* That means the message has 30 seconds to be processed
+* After the message visibility timeout is over, the message is “visible” in SQS
+  ![preview](./Images/aws_cloud195.png)
+* If a message is not processed within the visibility timeout, it will be processed **twice**
+* A consumer could call the **ChangeMessageVisibility** API to get more time
+* If visibility timeout is high (hours), and consumer crashes, re-processing will take time
+* If visibility timeout is too low (seconds), we may get duplicates
+* **Hands-on:**
+  * To change Message Visibility Timeout
+    * Go to created Queue and click `Edit`
+    * In `Configuration`, change `Visibility timeout`
+
+### SQS - Long Polling
+* When a consumer requests messages from the queue, it can optionally “wait” for messages to arrive if there are none in the queue
+* This is called Long Polling
+* **LongPolling decreases the number of API calls made to SQS while increasing the efficiency and reducing latency of your application
+* The wait time can be between 1 sec to 20 sec (20 sec preferable)
+* Long Polling is preferable to Short Polling
+* Long polling can be enabled at the queue level or at the API level using **WaitTimeSeconds**
+  ![preview](./Images/aws_cloud196.png)
+
+### SQS – FIFO Queue
+* FIFO = First In First Out (ordering of messages in the queue)
+  ![preview](./Images/aws_cloud197.png)
+* Limited throughput: 300 msg/s without batching, 3000 msg/s with
+* Exactly-once send capability (by removing duplicates)
+* Messages are processed in order by the consumer
+#### Hands-on
+* FIFO queue names must end with `.fifo`
+* Go to created FIFO Queue and click `Send and receive messages`
+  * In `Send message`, provide `Message body`, `Message group ID` and `Message deduplication ID`
+  * Then click `Send message`
+
+### SQS with Auto Scaling Group (ASG)
+  ![preview](./Images/aws_cloud193.png)
+
+### SQS to decouple between application tiers
+  ![preview](./Images/aws_cloud194.png)
+* **If the load is too big, some transactions may be lost:**
+  ![preview](./Images/aws_cloud198.png)
+* **SQS as a buffer to database writes:**
+  ![preview](./Images/aws_cloud199.png)
+
+## Amazon SNS (Simple Notification Service)
+* What if you want to send one message to many receivers?
+  ![preview](./Images/aws_cloud200.png)
+* The “event producer” only sends message to one SNS topic
+* As many “event receivers” (subscriptions) as we want to listen to the SNS topic notifications
+* Each subscriber to the topic will get all the messages (note: new feature to filter messages)
+* Up to 12,500,000 subscriptions per topic
+* 100,000 topics limit
+  ![preview](./Images/aws_cloud201.png)
+
+### SNS integrates with a lot of AWS services
+* Many AWS services can send data directly to SNS for notifications
+  ![preview](./Images/aws_cloud202.png)
+
+### SNS – How to publish
+* Topic Publish (using the SDK)
+  * Create a topic
+  * Create a subscription (or many)
+  * Publish to the topic
+* Direct Publish (for mobile apps SDK)
+  * Create a platform application 
+  * Create a platform endpoint
+  * Publish to the platform endpoint
+  * Works with Google GCM, Apple APNS, Amazon ADM…
+
+### SNS – Security
+* **Encryption:**
+  * In-flight encryption using HTTPS API
+  * At-rest encryption using KMS keys
+  * Client-side encryption if the client wants to perform encryption/decryption itself 
+* **Access Controls:** IAM policies to regulate access to the SNS API
+* **SNS Access Policies** (similar to S3 bucket policies)
+  * Useful for cross-account access to SNS topics 
+  * Useful for allowing other services ( S3…) to write to an SNS topic
+
+### SNS + SQS: Fan Out
+  ![preview](./Images/aws_cloud203.png)
+* Push once in SNS, receive in all SQS queues that are subscribers
+* Fully decoupled, no data loss
+* SQS allows for: data persistence, delayed processing and retries of work
+* Ability to add more SQS subscribers over time
+* Make sure your SQS queue **access policy** allows for SNS to write
+* Cross-Region Delivery: works with SQS Queues in other regions
+
+### Application: S3 Events to multiple queues
+* For the same combination of: **event type** (e.g. object create) and prefix (e.g. images/) you can only have one S3 Event rule
+* If you want to send the same S3 event to many SQS queues, use fan-out
+  ![preview](./Images/aws_cloud204.png)
+
+### Application: SNS to Amazon S3 through Kinesis Data Firehose
+* SNS can send to Kinesis and therefore we can have the following solutions architecture:
+  ![preview](./Images/aws_cloud205.png)
+
+### Amazon SNS – FIFO Topic
+* FIFO = First In First Out (ordering of messages in the topic)
+  ![preview](./Images/aws_cloud206.png)
+* Similar features as SQS FIFO:
+  * **Ordering** by Message Group ID (all messages in the same group are ordered)
+  * **Deduplication** using a Deduplication ID or Content Based Deduplication
+* **Can have SQS Standard and FIFO queues as subscribers**
+* Limited throughput (same throughput as SQS FIFO)
+
+### SNS FIFO + SQS FIFO: Fan Out
+* In case you need fan out + ordering + deduplication
+  ![preview](./Images/aws_cloud207.png)
+
+### SNS – Message Filtering
+* JSON policy used to filter messages sent to SNS topic’s subscriptions
+* If a subscription doesn’t have a filter policy, it receives every message 
+  ![preview](./Images/aws_cloud208.png)
+
+### Create SNS Topic
+* In SNS, go to `Topics` and click `Create topic`
+  * Select `Type` and give `Name`
+  * Click `Create topic`
+* Go to created Topic `-->` `Subscriptions`
+  * Click `Create subscription`
+  * Select `Protocol` (Email)
+  * Give `Endpoint` (example@mail.com)
+  * Click `Create subscription`
+* Then go to Mail and click `Confirm subscription`
+* Go to Created Topic, in `Subscriptions` shows the Status `Confirmed/Pending confirmation`
+* Go to Created Topic and click `Publish message` for Test
+  * Give `Subject` and `Message body`
+  * Click `Publish message`
+  * This can helpful for testing Subscriptions
+
+## Kinesis
+* Makes it easy to **collect**, **process**, and **analyze** streaming data in real-time 
+* Ingest real-time data such as: Application logs, Metrics, Website clickstreams, IoT telemetry data…
+  ![preview](./Images/aws_cloud209.png)
+* **Kinesis Data Streams:** capture, process, and store data streams
+* **Kinesis Data Firehose:** load data streams into AWS data stores
+* **Kinesis Data Analytics:** analyze data streams with SQL or Apache Flink
+* **Kinesis Video Streams:** capture, process, and store video streams
+
+### Kinesis Data Streams
+  ![preview](./Images/aws_cloud210.png)
+* Retention between 1 day to 365 days
+* Ability to reprocess (replay) data
+* Once data is inserted in Kinesis, it can’t be deleted (immutability)
+* Data that shares the same partition goes to the same shard (ordering)
+* Producers: AWS SDK, Kinesis Producer Library (KPL), Kinesis Agent
+* Consumers: 
+  * Write your own: Kinesis Client Library (KCL), AWS SDK
+  * Managed: AWS Lambda, Kinesis Data Firehose, Kinesis Data Analytics
+* **Kinesis Data Streams – Capacity Modes:**
+  * **Provisioned mode:**
+    * You choose the number of shards provisioned, scale manually or using API
+    * Each shard gets 1MB/s in (or 1000 records per second)
+    * Each shard gets 2MB/s out (classic or enhanced fan-out consumer)
+    * You pay per shard provisioned per hour
+  * **On-demand mode:**
+    * No need to provision or manage the capacity
+    * Default capacity provisioned (4 MB/s in or 4000 records per second)
+    * Scales automatically based on observed throughput peak during the last 30 days
+    * Pay per stream per hour & data in/out per GB
+* **Kinesis Data Streams Security:**
+  * Control access / authorization using IAM policies
+  * Encryption in flight using HTTPS endpoints
+  * Encryption at rest using KMS
+  * You can implement encryption/decryption of data on client side (harder)
+  * VPC Endpoints available for Kinesis to access within VPC
+  * Monitor API calls using CloudTrail
+  ![preview](./Images/aws_cloud211.png)
+#### Create Kinesis Data Stream
+* Go to Kinesis, select `Kinesis Data Streams` and click `Create data stream`
+  * Give `Data stream name`
+  * Choose `Capacity mode` (If you choose `Provisioned`, give `Provisioned shards`)
+  * Click `Create data stream`
+#### Hands-on Kinesis Data Stream
+* Open `AWS CloudShell`
+* Use below Commands:
+  ```bash
+  # get the AWS CLI version
+  aws --version
+
+  # PRODUCER (Use below Commands to Add Data based on Version)
+  # CLI v2
+  aws kinesis put-record --stream-name DemoStream --partition-key user1 --data "user signup" --cli-binary-format raw-in-base64-out
+  # CLI v1
+  aws kinesis put-record --stream-name DemoStream --partition-key user1 --data "user signup"
+
+  # CONSUMER 
+  # describe the stream
+  aws kinesis describe-stream --stream-name DemoStream
+  # Consume some data
+  aws kinesis get-shard-iterator --stream-name DemoStream --shard-id shardId-000000000000 --shard-iterator-type TRIM_HORIZON
+
+  aws kinesis get-records --shard-iterator <Provide_ShardIterator_Data>
+  ```
+  * The Data is in Base64 Encoded Format, We want to see Original Data need to Decode it.
+
+### Kinesis Data Firehose
+  ![preview](./Images/aws_cloud212.png)
+* Fully Managed Service, no administration, automatic scaling, serverless
+  * AWS: Redshift / Amazon S3 / OpenSearch 
+  * 3rd party partner: Splunk / MongoDB / DataDog / NewRelic / … 
+  * Custom: send to any HTTP endpoint
+* Pay for data going through Firehose
+* **Near Real Time**
+  * Buffer interval: 0 seconds (no buffering) to 900 seconds
+  * Buffer size: minimum 1MB
+* Supports many data formats, conversions, transformations, compression
+* Supports custom data transformations using AWS Lambda
+* Can send failed or all data to a backup S3 bucket
+
+#### Kinesis Data Streams vs Firehose
+  ![preview](./Images/aws_cloud217.png)
+
+#### Create Amazon Data Firehose
+* Go to Amazon Data Firehose and click `Create Firehose stream`
+  * `Choose source and destination` (Source: `Amazon Kinesis Data Streams` & Destination: `Amazon S3`)
+  * In `Source settings`, Choose `Kinesis data stream`
+  * In `Destination settings`, Choose `S3 bucket`
+    * In `Buffer hints, compression, file extension and encryption`
+      * Change `Buffer size` and `Buffer interval`
+  * Click `Create Firehose stream`
+#### Hands-on
+* After Creating Data Firehose, go to `Kinesis Data Streams` and add some data
+* After Buffer Time, the Data is reflected into Destination S3 Bucket
+* Go to Destination S3 Bucket and check Data
+
+## Data Ordering for Kinesis vs SQS FIFO
+* **Ordering data into Kinesis:**
+  * Imagine you have 100 trucks (truck_1, truck_2, … truck_100) on the road sending their GPS positions regularly into AWS. 
+  * You want to consume the data in order for each truck, so that you can track their movement accurately. 
+  * How should you send that data into Kinesis?
+  * **Answer: send using a “Partition Key” value of the “truck_id”**
+  * **The same key will always go to the same shard**
+  ![preview](./Images/aws_cloud213.png)
+* **Ordering data into SQS:**
+  * For SQS standard, there is no ordering. 
+  * For SQS FIFO, if you don’t use a Group ID, messages are consumed in the order they are sent, **with only one consumer**
+  ![preview](./Images/aws_cloud214.png)
+  * You want to scale the number of consumers, but you want messages to be “grouped” when they are related to each other
+  * Then you use a Group ID (similar to Partition Key in Kinesis)
+  ![preview](./Images/aws_cloud215.png)
+* **Kinesis vs SQS Ordering**
+  * **Let’s assume 100 trucks, 5 kinesis shards, 1 SQS FIFO**
+  * **Kinesis Data Streams:**
+    * On average you’ll have 20 trucks per shard
+    * Trucks will have their data ordered within each shard
+    * The maximum amount of consumers in parallel we can have is 5 
+    * Can receive up to 5 MB/s of data
+  * **SQS FIFO:**
+    * You only have one SQS FIFO queue
+    * You will have 100 Group ID 
+    * You can have up to 100 Consumers (due to the 100 Group ID)
+    * You have up to 300 messages per second (or 3000 if using batching)
+
+## SQS vs SNS vs Kinesis
+  ![preview](./Images/aws_cloud218.png)
+
+## Amazon MQ
+* SQS, SNS are “cloud-native” services: proprietary protocols from AWS
+* Traditional applications running from on-premises may use open protocols such as: MQTT, AMQP, STOMP, Openwire, WSS
+* **When migrating to the cloud**, instead of re-engineering the application to use SQS and SNS, we can use Amazon MQ 
+* **Amazon MQ is a managed message broker service for**
+  ![preview](./Images/aws_cloud219.png)
+* Amazon MQ doesn’t “scale” as much as SQS / SNS
+* Amazon MQ runs on servers, can run in Multi-AZ with failover
+* Amazon MQ has both queue feature (~SQS) and topic features (~SNS)
+* **Amazon MQ – High Availability:**
+  ![preview](./Images/aws_cloud216.png)
