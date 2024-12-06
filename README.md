@@ -4252,3 +4252,335 @@
 * Amazon MQ has both queue feature (~SQS) and topic features (~SNS)
 * **Amazon MQ – High Availability:**
   ![preview](./Images/aws_cloud216.png)
+
+
+
+# Containers on AWS (ECS, ECR & EKS)
+## Docker
+* Docker is a software development platform to deploy apps
+* Apps are packaged in **containers** that can be run on any OS
+* Apps run the same, regardless of where they’re run 
+  * Any machine
+  * No compatibility issues
+  * Predictable behavior
+  * Less work
+  * Easier to maintain and deploy
+  * Works with any language, any OS, any technology
+* Use cases: microservices architecture, lift-and-shift apps from on-premises to the AWS cloud, …
+* **Docker on an OS:**
+  ![preview](./Images/aws_cloud220.png)
+
+### Where are Docker images stored?
+* Docker images are stored in Docker Repositories
+* **Docker Hub** (https://hub.docker.com)
+  * **Public repository**
+  * Find base images for many technologies or OS (e.g., Ubuntu, MySQL, …)
+* **Amazon ECR (Amazon Elastic Container Registry)**
+  * **Private repository**
+  * Public repository (Amazon ECR Public Gallery https://gallery.ecr.aws)
+
+### Docker vs. Virtual Machines
+* Docker is ”sort of” a virtualization technology, but not exactly
+* Resources are shared with the host => many containers on one server
+  ![preview](./Images/aws_cloud221.png)
+
+### Getting Started with Docker
+  ![preview](./Images/aws_cloud222.png)
+
+### Docker Containers Management on AWS
+* **Amazon Elastic Container Service (Amazon ECS)**
+  * Amazon’s own container platform
+* **Amazon Elastic Kubernetes Service (Amazon EKS)**
+  * Amazon’s managed Kubernetes (open source)
+* **AWS Fargate**
+  * Amazon’s own Serverless container platform
+  * Works with ECS and with EKS
+* **Amazon ECR:**
+  * Store container images
+
+## Amazon ECS (Elastic Container Service)
+### EC2 Launch Type
+* ECS = Elastic Container Service
+* Launch Docker containers on AWS = Launch **ECS Tasks** on ECS Clusters
+* **EC2 Launch Type: you must provision & maintain the infrastructure (the EC2 instances)**
+* Each EC2 Instance must run the ECS Agent to register in the ECS Cluster
+* AWS takes care of starting / stopping containers
+  ![preview](./Images/aws_cloud223.png)
+
+### Fargate Launch Type
+* Launch Docker containers on AWS
+* **You do not provision the infrastructure (no EC2 instances to manage)**
+* **It’s all Serverless!**
+* You just create task definitions
+* AWS just runs ECS Tasks for you based on the CPU / RAM you need
+* To scale, just increase the number of tasks. Simple - no more EC2 instances
+  ![preview](./Images/aws_cloud224.png)
+
+### IAM Roles for ECS
+* **EC2 Instance Profile (EC2 Launch Type only):**
+  * Used by the ECS agent
+  * Makes API calls to ECS service
+  * Send container logs to CloudWatch Logs
+  * Pull Docker image from ECR
+  * Reference sensitive data in Secrets Manager or SSM Parameter Store
+* **ECS Task Role:**
+  * Allows each task to have a specific role
+  * Use different roles for the different ECS Services you run
+  * Task Role is defined in the **task definition**
+  ![preview](./Images/aws_cloud225.png)
+
+### ECS – Load Balancer Integrations
+* **Application Load Balancer** supported and works for most use cases
+* **Network Load Balancer** recommended only for high throughput / high performance use cases, or to pair it with AWS Private Link
+* **Classic Load Balancer** supported but not recommended (no advanced features – no Fargate)
+  ![preview](./Images/aws_cloud226.png)
+
+### ECS – Data Volumes (EFS)
+* Mount EFS file systems onto ECS tasks
+* Works for both **EC2** and **Fargate** launch types
+* Tasks running in any AZ will share the same data in the EFS file system
+* **Fargate + EFS = Serverless**
+* Use cases: persistent multi-AZ shared storage for your containers
+* Note: 
+  * Amazon S3 cannot be mounted as a file system
+  ![preview](./Images/aws_cloud227.png)
+
+### Create ECS Cluster
+* Go to `ECS --> Clusters`
+* Click `Create cluster`
+  * Give `Cluster name`
+  * Choose `Infrastructure Info` (Choose Both `AWS Fargate (serverless)` and `Amazon EC2 instances`)
+    * Create New `Auto Scaling group (ASG)` and provide all details
+  * Provide `Network settings for Amazon EC2 instances`
+  * Click `Create`
+* Go to created Cluster `Infrastructure`, in that shows Capacity providers.
+
+### Create ECS Service
+* Go `to ECS --> Task definitions`, click `Create new task definition`
+  * Give `Task definition family name`
+  * Provide `Infrastructure requirements`
+    * Select `Launch type` (Launch type)
+    * Choose `OS, Architecture, Network mode`
+    * Provide `Task size`
+  * In `Container`
+    * Give `Container details` (Name & Image URI)
+    * Provide `Port mappings` (Container port, Protocol, Port name and App protocol)
+    * Provide required remaining data
+  * Click `Create`
+* Then go to created `Cluster Services`, click `Create`
+  * In `Environment`,
+    * Choose `Compute options` (Launch type)
+    * Select `Launch type` (FARGATE)
+  * In `Deployment configuration`,
+    * Select `Application type` (Service)
+    * Choose `Family` and `Revision`
+    * Give `Service name`
+    * Select `Service type` and give `Desired tasks`
+  * Provide `Networking` (Give all details)
+  * Provide `Load balancing` (Give all details)
+  * Click `Create`
+* Go to Created `Servive`
+  * Go to `Service Tasks`
+    * Open particular Task
+    * In that shows `Configuration, Logs, Networking & Volumes`
+  * Go to `Service Events`
+    * In that shows all Events happened in that Service
+* **To Increase Tasks (Containers)**
+  * Go to `Service Tasks` and click `Update service`
+  * Provide `Desired tasks` and click `Update`
+
+### ECS Service Auto Scaling
+* Automatically increase/decrease the desired number of ECS tasks
+* Amazon ECS Auto Scaling uses **AWS Application Auto Scaling**
+  * ECS Service Average CPU Utilization
+  * ECS Service Average Memory Utilization - Scale on RAM
+  * ALB Request Count Per Target – metric coming from the ALB
+* **Target Tracking** – scale based on target value for a specific CloudWatch metric
+* **Step Scaling** – scale based on a specified CloudWatch Alarm
+* **Scheduled Scaling** – scale based on a specified date/time (predictable changes)
+* ECS Service Auto Scaling (task level) **≠** EC2 Auto Scaling (EC2 instance level)
+* Fargate Auto Scaling is much easier to setup (because Serverless)
+* **EC2 Launch Type – Auto Scaling EC2 Instances:**
+  * Accommodate ECS Service Scaling by adding underlying EC2 Instances
+  * **Auto Scaling Group Scaling**
+    * Scale your ASG based on CPU Utilization
+    * Add EC2 instances over time
+  * **ECS Cluster Capacity Provider**
+    * Used to automatically provision and scale the infrastructure for your ECS Tasks
+    * Capacity Provider paired with an Auto Scaling Group
+    * Add EC2 Instances when you’re missing capacity (CPU, RAM…)
+* **ECS Scaling – Service CPU Usage Example:**
+  ![preview](./Images/aws_cloud228.png)
+
+### Amazon ECS - Solutions Architectures
+* **ECS tasks invoked by Event Bridge:**
+  ![preview](./Images/aws_cloud229.png)
+* **ECS tasks invoked by Event Bridge Schedule:**
+  ![preview](./Images/aws_cloud230.png)
+* **ECS – SQS Queue Example:**
+  ![preview](./Images/aws_cloud231.png)
+* **ECS – Intercept Stopped Tasks using EventBridge:**
+  ![preview](./Images/aws_cloud232.png)
+
+## Amazon ECR (Elastic Container Registry)
+* ECR = Elastic Container Registry
+* Store and manage Docker images on AWS
+* **Private** and **Public** repository (**Amazon ECR Public Gallery** https://gallery.ecr.aws)
+* Fully integrated with ECS, backed by Amazon S3
+* Access is controlled through IAM (permission errors => policy)
+* Supports image vulnerability scanning, versioning, image tags, image lifecycle, …
+  ![preview](./Images/aws_cloud233.png)
+
+## Amazon EKS (Elastic Kubernetes Service)
+* Amazon EKS = Amazon Elastic Kubernetes Service 
+* It is a way to launch **managed Kubernetes clusters on AWS**
+* Kubernetes is an **open-source system** for automatic deployment, scaling and management of containerized (usually Docker) application 
+* It’s an alternative to ECS, similar goal but different API
+* EKS supports **EC2** if you want to deploy worker nodes or **Fargate** to deploy serverless containers
+* **Use case:** if your company is already using Kubernetes on-premises or in another cloud, and wants to migrate to AWS using Kubernetes
+* **Kubernetes is cloud-agnostic** (can be used in any cloud – Azure, GCP…)
+* For multiple regions, deploy one EKS cluster per region
+* Collect logs and metrics using **CloudWatch Container Insights**
+* **Amazon EKS - Diagram:**
+  ![preview](./Images/aws_cloud234.png)
+
+### Amazon EKS – Node Types
+* **Managed Node Groups**
+  * Creates and manages Nodes (EC2 instances) for you
+  * Nodes are part of an ASG managed by EKS
+  * Supports On-Demand or Spot Instances
+* **Self-Managed Nodes**
+  * Nodes created by you and registered to the EKS cluster and managed by an ASG
+  * You can use prebuilt AMI - Amazon EKS Optimized AMI
+  * Supports On-Demand or Spot Instances
+* **AWS Fargate**
+  * No maintenance required; no nodes managed
+
+### Amazon EKS – Data Volumes 
+* Need to specify **StorageClass** manifest on your EKS cluster
+* Leverages a **Container Storage Interface (CSI)** compliant driver
+* Support for
+  * Amazon EBS
+  * Amazon EFS (works with Fargate)
+  * Amazon FSx for Lustre
+  * Amazon FSx for NetApp ONTAP
+
+### Create EKS Cluster
+* Go to EKS, click `Add cluster` and select `Create`
+* **Step-1** `Configure cluster`
+  * In `Cluster configuration`,
+    * Give `Name`
+    * Create and Select `Cluster IAM role`
+      ```
+      --> Click 'Amazon EKS User Guide' and Follow 'Creating the Amazon EKS cluster role' Steps.
+      --> Go to 'IAM Roles' and click 'Create role'.
+      --> Select 'Trusted entity type' to 'AWS service'
+      --> In 'Use case', select 'Service: EKS' & 'Use case: EKS - Cluster'.
+      --> Give 'Role name: eksClusterRole' and click 'Create role'.
+      ```
+      <center> (or) </center>
+
+      ```
+      --> Click 'Create recommended role'
+      --> Go with all Defaults and give 'Role name'
+      --> Click 'Create role'
+      ```
+  * In `Kubernetes version settings`, select `Kubernetes version`
+  * In `Auto Mode Compute`, Create and Select `Node IAM role`
+    ```
+    --> Click 'Amazon EKS User Guide' and Follow 'Creating the Amazon EKS node IAM role' Steps.
+    --> Go to 'IAM Roles' and click 'Create role'.
+    --> Select 'Trusted entity type' to 'AWS service'
+    --> In 'Use case', Choose 'EC2'.
+    --> In 'Add permissions', select 'AmazonEKSWorkerNodePolicy & AmazonEC2ContainerRegistryPullOnly'.
+    --> Give 'Role name: AmazonEKSNodeRole' and click 'Create role'.
+    ```
+    <center> (or) </center>
+
+    ```
+      --> Click 'Create recommended role'
+      --> Go with all Defaults and give 'Role name'
+      --> Click 'Create role'
+      ```
+* **Step-2** `Specify networking`
+  * Provide `Networking`
+  * In `Cluster endpoint access`, select `Public and private`
+* **Step-3** `Configure observability`
+  * Provide `Configure observability` details
+* **Step-4** `Select add-ons`
+  * Select required `Add-ons`
+* **Step-5** `Configure selected add-ons settings`
+  * If We Choose Add-ons, in this need to Configure that Add-ons
+* **Step-6** `Review and create`
+  * Review all details and click `Create`.
+#### Key Points
+* **Resources:** In this, We can manage all K8s Resources.
+* **Compute:** Which is used to add Node Groups.
+* **Add-ons:** Which is used to add Add-ons.
+  * Click `Get more add-ons`, select and configure required one.
+  * Click `Create`.
+
+### Create Node Groups
+* Go to created `Cluster Compute`
+* In `Node groups`, click `Add node group`
+* **Step-1** `Configure node group`
+  * In `Node group configuration`,
+    * Give `Name`
+    * Create and Select `Node IAM role`
+      ```
+      --> Click 'Create recommended role'
+      --> Go with all Defaults and give 'Role name'
+      --> Click 'Create role'
+      ```
+* **Step-2** `Set compute and scaling configuration`
+  * Provide `Node group compute configuration`
+  * Provide `Node group scaling configuration`
+  * Provide `Node group update configuration`
+* **Step-3** `Specify networking`
+  * Select `Node group network configuration`
+* **Step-4** `Review and create`
+  * Review all details and click `Create`
+
+## AWS App Runner
+* Fully managed service that makes it easy to deploy web applications and APIs at scale
+* No infrastructure experience required
+* Start with your source code or container image
+* Automatically builds and deploy the web app
+* Automatic scaling, highly available, load balancer, encryption
+* VPC access support
+* Connect to database, cache, and message queue services
+* Use cases: web apps, APIs, microservices, rapid production deployments
+  ![preview](./Images/aws_cloud235.png)
+
+### Create App Runner
+* Go to `AWS App Runner` and click `Create an App Runner service`
+* **Step-1** `Source and deployment`
+  * In `Source`
+    * Select `Repository type` (Container registry)
+    * Select `Provider` (Amazon ECR Public)
+      ```
+      --> Go to 'Amazon ECR Public Gallery' (https://gallery.ecr.aws/)
+      --> Search for Container Image (httpd)
+      --> Select 'Repository' and 'Copy' Image Address
+      --> Provide in 'Container image URI'
+      ```
+  * Select `Deployment settings`
+* **Step-2** `Configure service`
+  * In `Service settings`,
+    * Give `Service name`
+    * Select `Virtual CPU` & `Virtual memory`
+    * In `Port`, give App Port
+  * Provide `Auto scaling`, `Health check`, `Security`, `Networking` & `Observability`
+* **Step-3** `Review and create`
+  * Review all details and click `Create & deploy`
+
+## AWS App2Container (A2C)
+* CLI tool for migrating and modernizing **Java** and **.NET** web apps into Docker Containers
+* **Lift-and-shift** your apps running in on-premises bare metal, virtual machines, or in any Cloud to AWS
+* Accelerate modernization, no code changes, migrate legacy apps…
+* Generates CloudFormation templates (compute, network…)
+* Register generated Docker containers to ECR
+* Deploy to ECS, EKS, or App Runner
+* Supports pre-built CI/CD pipelines
+* **AWS App2Container (A2C):**
+  ![preview](./Images/aws_cloud236.png)
